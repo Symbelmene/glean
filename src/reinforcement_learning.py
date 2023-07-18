@@ -10,6 +10,9 @@ import utils
 from config import Config, Interval
 cfg = Config()
 
+if cfg.MODE == 'test':
+    import test_utils
+
 
 class StockMarket(Env):
     def __init__(self, numStocks, windowSize, start, end, startMoney, buyAmount=1000):
@@ -48,21 +51,28 @@ class StockMarket(Env):
         # Reset the current step
         self.currStep = 0
 
-        try:
-            # Choose numStocks random stocks from the dataset
-            validTickers = utils.getValidTickers(Interval.DAY)
-            self.tickers = np.random.choice(validTickers, size=self.observation_shape[0], replace=False)
-            stocks = [Stock(ticker) for ticker in self.tickers]
+        if cfg.MODE == 'train':
+            try:
+                # Choose numStocks random stocks from the dataset
+                validTickers = utils.getValidTickers(Interval.DAY)
+                self.tickers = np.random.choice(validTickers, size=self.observation_shape[0], replace=False)
+                stocks = [Stock(ticker) for ticker in self.tickers]
+                self.holdings = {ticker : 0 for ticker in self.tickers}
+
+                # Slice the ticker frames on the start and end dates then merge them into one dataframe
+                for stock in stocks:
+                    stock.slice(self.start, self.end)
+            except ValueError: # TODO: This is a temporary fix for tickers with data missing in time period
+                return self.reset()
+
+            self.stockData = pd.concat([stock.data['Close'] for stock in stocks], axis=1, keys=self.tickers)
+            self.stockData.fillna(method='ffill', inplace=True)
+        elif cfg.MODE == 'test':
+            df = test_utils.generateRandomTickerDataframe(252, self.observation_shape[0])
+            self.tickers = df.columns
+            self.stockData = df
             self.holdings = {ticker : 0 for ticker in self.tickers}
 
-            # Slice the ticker frames on the start and end dates then merge them into one dataframe
-            for stock in stocks:
-                stock.slice(self.start, self.end)
-        except ValueError:
-            return self.reset()
-
-        self.stockData = pd.concat([stock.data['Close'] for stock in stocks], axis=1, keys=self.tickers)
-        self.stockData.fillna(method='ffill', inplace=True)
         self.window = self.stockData.iloc[:self.observation_shape[1]]
 
         returns = np.diff(self.stockData, axis=0) / np.array(self.stockData)[:-1,:]

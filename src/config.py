@@ -12,6 +12,8 @@ class Config:
 
         self.env = parseEnvFile('../.env')
 
+        self.MODE = 'test' # 'train' or 'test'
+
         self.BASE_DIR = self.env['DB_DIR']
         self.TRAIN_DIR = self.BASE_DIR + '/train'
 
