@@ -12,9 +12,6 @@ class Config:
 
         self.env = parseEnvFile('../.env')
 
-        self.THREADS   = 20
-        self.PROCESSES = 8
-
         self.BASE_DIR = self.env['DB_DIR']
         self.TRAIN_DIR = self.BASE_DIR + '/train'
 
