@@ -12,10 +12,6 @@ from tabulate import tabulate
 from plotly import graph_objects as go
 from multiprocessing import Pool
 from datetime import datetime
-from finclasses import addBaseIndicatorsToDf
-
-import utils
-import finclasses
 
 from config import Config, Interval
 cfg = Config()
@@ -53,27 +49,6 @@ def loadRawStockData(ticker, interval):
 
     df = df[~df.index.duplicated(keep='first')]
     return df
-
-
-def loadMultipleDFsAndMergeByColumnName(colName, sDate, eDate, interval, tickers):
-    mult_df = pd.DataFrame()
-
-    for x in tickers:
-        df = loadRawStockData(x, interval)
-
-        if not df.index.is_unique:
-            df = df.loc[~df.index.duplicated(), :]
-
-        if df.index[-1] < eDate or df.index[0] > sDate:
-            log(f'WARNING: Ticker {x} is missing stock data in requested range!')
-            continue
-
-        df = df[(df.index >= sDate) & (df.index <= eDate)]
-        df = addBaseIndicatorsToDf(df)
-
-        mult_df[x] = df[colName]
-
-    return mult_df
 
 
 def getValidTickers(interval):
@@ -221,6 +196,55 @@ def get_fill_color(label):
         return 'rgba(250,0,0,0.4)'
 
 
+def addDailyReturnToDF(df):
+    df['interval_return'] = (df['Close'] / df['Close'].shift(1)) - 1
+    return df
+
+
+def addCumulativeReturnToDF(df):
+    df['cum_return'] = (1 + df['interval_return']).cumprod()
+    return df
+
+
+def addBollingerBands(df, window=20):
+    df['middle_band'] = df['Close'].rolling(window=window).mean()
+    df['upper_band']  = df['middle_band'] + 1.96 * df['Close'].rolling(window=window).std()
+    df['lower_band']  = df['middle_band'] - 1.96 * df['Close'].rolling(window=window).std()
+    return df
+
+
+def addIchimoku(df):
+    # Conversion Line - (Highest value in period / lowest value in period) / 2 (Period = 9)
+    highValue = df['High'].rolling(window=9).max()
+    lowValue  = df['Low'].rolling(window=9).min()
+    df['Conversion'] = (highValue + lowValue) / 2
+
+    # Base Line - (Highest value in period / lowest value in period) / 2 (Period = 26)
+    highValue2 = df['High'].rolling(window=26).max()
+    lowValue2  = df['Low'].rolling(window=26).min()
+    df['Baseline'] = (highValue2 + lowValue2) / 2
+
+    # Span A - (Conversion + Base) / 2 - (Period = 26)
+    df['SpanA'] = ((df['Conversion'] + df['Baseline']) / 2)
+
+    # Span B - (Conversion + Base) / 2 - (Period = 52)
+    highValue3 = df['High'].rolling(window=52).max()
+    lowValue3  = df['Low'].rolling(window=52).min()
+    df['SpanB'] = ((highValue3 + lowValue3) / 2).shift(26)
+
+    # Lagging Span
+    df['Lagging'] = df['Close'].shift(-26)
+    return df
+
+
+def addBaseIndicatorsToDf(df):
+    df = addDailyReturnToDF(df)
+    df = addCumulativeReturnToDF(df)
+    df = addBollingerBands(df)
+    df = addIchimoku(df)
+    return df
+
+
 ###################################################################
 # BANALYSIS
 ###################################################################
@@ -229,8 +253,8 @@ def mergeDfByColumn(col_name, sdate, edate, *tickers):
     # Will hold data for all dataframes with the same column name
     mult_df = pd.DataFrame()
     for ticker in tickers:
-        df = utils.loadRawStockData(ticker, Interval.DAY)
-        df = finclasses.addBaseIndicatorsToDf(df)
+        df = loadRawStockData(ticker, Interval.DAY)
+        df = addBaseIndicatorsToDf(df)
         mask = (df.index >= pd.to_datetime(sdate)) & (df.index <= pd.to_datetime(edate))
         mult_df[ticker] = df.loc[mask][col_name]
     return mult_df
