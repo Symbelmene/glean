@@ -14,6 +14,39 @@ cfg = Config()
 wandb.login()
 
 
+def plotStockPricesToWandb(history):
+    keys = list(history[0]['Stocks'].keys())
+
+    try:
+        plot = wandb.plot.line_series(
+            xs=[i for i in range(len(history))],
+            ys=[[history[i]['Stocks'][key] for i in range(len(history))] for key in keys],
+            keys=keys,
+            title="Stock Price Plots",
+            xname="Days",
+        )
+    except:
+        x = 1
+    return plot
+
+
+def getAssetValues(stockValues, holdings):
+    return sum([stockValues[key] * holdings[key] for key in stockValues.keys()])
+
+
+def plotMoneyAndAssetsToWandb(history):
+    moneyList = [history[i]['Money'] for i in range(len(history))]
+    assetsList = [getAssetValues(entry['Stocks'], entry['Assets']) for entry in history]
+    plot = wandb.plot.line_series(
+        xs=[i for i in range(len(history))],
+        ys=[moneyList, assetsList, [moneyList[i] + assetsList[i] for i in range(len(history))] ],
+        keys=['Money', 'Assets', 'Total'],
+        title="Money",
+        xname="Days",
+    )
+    return plot
+
+
 def main():
     gamma = cfg.REINFORCEMENT_LEARNING.GAMMA
     episodesPerNetworkUpdate = cfg.REINFORCEMENT_LEARNING.EPISODES_PER_NETWORK_UPDATE
@@ -63,14 +96,24 @@ def main():
         state = sm.reset()
         episodeRewards = 0
         losses = []
+        history = []
+        actionDict = sm.get_action_meanings()
 
         # Run episode
         for timestep in itertools.count():
             action, rate, flag = agent.select_action(state, policyNetwork)
-            nextState, reward, done, _ = sm.step(action)
+            nextState, reward, done, info = sm.step(action)
 
             # Add rewards
             episodeRewards += reward
+
+            history.append({"Action"      : actionDict[action],
+                            "Rate"        : rate,
+                            "Action Type" : 'explore' if flag else 'exploit',
+                            "Stocks"      : state.iloc[-1].to_dict(),
+                            "Money"       : sm.money,
+                            "Assets"      : sm.holdings
+                            })
 
             # Store the experience
             memory.push(Experience(state, action, nextState, reward, done))
@@ -87,6 +130,7 @@ def main():
                 qsaTarget = np.where(dones, rewards, rewards + gamma * qsaPrime)
                 qsaTarget = tf.convert_to_tensor(qsaTarget, dtype='float32')
 
+                # Back propagate loss
                 with tf.GradientTape() as tape:
                     qsa = tf.math.reduce_sum(
                         policyNetwork(rl.normaliseStates(nextStates)) * tf.one_hot(actions, sm.action_space.n),
@@ -115,10 +159,11 @@ def main():
         totalRewards[episode] = episodeRewards
         avg_rewards = totalRewards[max(0, episode - 100):(episode + 1)].mean()  # Running average reward of 100 iterations
 
-        # Good old book-keeping
         wandb.log({"Episode Reward": totalRewards[episode],
                    "Running Average Reward": avg_rewards,
-                   "Losses": mean(losses)#
+                   "Losses": mean(losses),
+                   "Stock Prices": plotStockPricesToWandb(history),
+                   "Money & Assets": plotMoneyAndAssetsToWandb(history)
                    })
 
         if episode % 1 == 0:
