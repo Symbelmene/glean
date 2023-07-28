@@ -10,8 +10,11 @@ def generateSinWave(numPts, numPeriods, offset=0):
 
 
 def generateRandomTicker(numPts):
-    y = random.randint(5, 500) * generateSinWave(numPts, random.randint(1, 10), offset=random.randint(0, 200))
-    return y - np.min(y) + random.randint(0, 200)
+    y = generateSinWave(numPts, random.randint(1, 10), offset=random.randint(0, 6))
+    for _ in range(random.randint(1, 5)):
+        y = y + generateSinWave(numPts, random.randint(1, 10), offset=random.randint(0, 6))
+    y = y + np.random.rand(numPts)
+    return y - np.min(y) + random.randint(1, 200)
 
 
 def generateRandomTickerDataframe(numPts, numTickers):

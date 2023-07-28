@@ -76,8 +76,10 @@ class StockMarket(Env):
         self.window = self.stockData.iloc[:self.observation_shape[1]]
 
         returns = np.diff(self.stockData, axis=0) / np.array(self.stockData)[:-1,:]
-        self.bestPossibleReturns = np.cumsum(np.max(np.hstack([returns, np.zeros((251, 1))]), axis=1))
 
+        bestFractionalReturns = ((self.stockData.shift(1) / self.stockData) - 1).max(axis=1).apply(lambda v: max(v, 0))
+        bestPossibleReturns = ((1 + bestFractionalReturns) * self.buyAmount)
+        self.bestPossibleReturns = np.cumsum(bestPossibleReturns) + self.startMoney
         return self.window
 
     def get_action_meanings(self):
@@ -98,7 +100,7 @@ class StockMarket(Env):
             price = self.window.iloc[-1][ticker]
             if self.money >= self.buyAmount:
                 self.money -= self.buyAmount
-                numShares = self.buyAmount // price
+                numShares = self.buyAmount / price
                 self.holdings[ticker] += numShares
                 report = f"Bought {numShares} shares of {ticker} at {round(price, 3)}"
             else:

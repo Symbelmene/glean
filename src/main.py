@@ -17,10 +17,14 @@ wandb.login()
 def plotStockPricesToWandb(history):
     keys = list(history[0]['Stocks'].keys())
 
+    stockVals = np.array([[history[i]['Stocks'][key] for i in range(len(history))] for key in keys])
+    stockValsNorm = (stockVals - np.min(stockVals, axis=0)) / np.max(stockVals, axis=0)
+    stockValsNormToList = [stockValsNorm[i].tolist() for i in range(len(keys))]
+
     try:
         plot = wandb.plot.line_series(
             xs=[i for i in range(len(history))],
-            ys=[[history[i]['Stocks'][key] for i in range(len(history))] for key in keys],
+            ys=stockValsNormToList,
             keys=keys,
             title="Stock Price Plots",
             xname="Days",
@@ -107,6 +111,7 @@ def main():
             # Add rewards
             episodeRewards += reward
 
+            print(sm.holdings)
             history.append({"Action"      : actionDict[action],
                             "Rate"        : rate,
                             "Action Type" : 'explore' if flag else 'exploit',
