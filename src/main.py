@@ -52,7 +52,9 @@ def plotMoneyAndAssetsToWandb(history):
 
 
 def main():
+    # Config values
     gamma = cfg.REINFORCEMENT_LEARNING.GAMMA
+
     episodesPerNetworkUpdate = cfg.REINFORCEMENT_LEARNING.EPISODES_PER_NETWORK_UPDATE
     numEpisodes = cfg.REINFORCEMENT_LEARNING.NUM_EPISODES
     # Initialise Environment

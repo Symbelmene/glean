@@ -252,7 +252,7 @@ class DQN_Agent:
 
 
 def buildLSTMModel(numStocks, windowSize):
-    # Builds and Functional LSTM model using the windowSize and numStocks as input and numActions
+    # Builds a Functional LSTM model using the windowSize and numStocks as input and numActions
     # as output
     numActions = 2 * numStocks + 1
     inputLayer = layers.Input(shape=(windowSize, numStocks))
@@ -284,5 +284,3 @@ def normaliseStates(states):
     for i in range(states.shape[0]):
         states[i] = normaliseState(states[i])
     return states
-
-
